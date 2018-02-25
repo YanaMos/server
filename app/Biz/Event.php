@@ -2,11 +2,11 @@
 
 namespace App\Biz;
 
-use App\Models\DailyRawMetricsModel;
+use App\Injectable;
 
 class Event
 {
-    use \App\Injectable;
+    use Injectable;
 
     public function save(string $metricName, float $value = 1.0, $time, array $slices = [])
     {

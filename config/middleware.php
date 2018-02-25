@@ -1,13 +1,16 @@
-<?php return [
+<?php use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
+
+return [
     new \App\Http\Middleware\TimerMiddleware(),
 
     // CORS
-    function ($request, $delegate) {
+    function (ServerRequestInterface $request, RequestHandlerInterface $handler) {
         /* @var \Psr\Http\Message\ResponseInterface $response */
         if ($request->getMethod() === 'OPTIONS') {
             $response = new \GuzzleHttp\Psr7\Response();
         } else {
-            $response = $delegate->process($request);
+            $response = $handler->handle($request);
         }
 
         $headers = [
@@ -42,18 +45,24 @@
 
 
     // Error handler
-    function ($request, $delegate) {
+    function (ServerRequestInterface $request, RequestHandlerInterface $handler) {
         $whoops = new \Whoops\Run;
         $whoops->pushHandler(new \Whoops\Handler\JsonResponseHandler());
         $whoops->register();
 
-        return $delegate->process($request);
+        return $handler->handle($request);
     },
 
     new \App\Http\Middleware\BasicAuthMiddleware([
         'user' => getenv('BASIC_AUTH_LOGIN'),
         'password' => getenv('BASIC_AUTH_PASS'),
     ]),
-    new \FastRouteMiddleware\Router(require __DIR__ . '/routes.php', '\App\Controllers\NotFoundController::showMessage'),
+//    new \Middlewares\FastRoute(require __DIR__ . '/routes.php', '\App\Controllers\NotFoundController::showMessage'),
+    new \Middlewares\FastRoute(\FastRoute\simpleDispatcher(function (FastRoute\RouteCollector $r) {
+        $routes = require __DIR__ . '/routes.php';
+        foreach ($routes as $route) {
+            $r->addRoute($route[0], $route[1], $route[2]);
+        }
+    })),
     new \App\Http\Middleware\RequestHandlerMiddleware(),
 ];

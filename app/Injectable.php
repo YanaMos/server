@@ -1,6 +1,7 @@
 <?php
 
 namespace App;
+use Injectable\BaseInjectable;
 
 /**
  * @property \App\Models\ModelFactory mysql
@@ -10,5 +11,5 @@ namespace App;
 
 trait Injectable
 {
-    use \Injectable\BaseInjectable;
+    use BaseInjectable;
 }

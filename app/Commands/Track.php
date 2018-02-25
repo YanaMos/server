@@ -1,9 +1,12 @@
 <?php
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace App\Commands;
 
+use App\Events\Event;
+use App\Events\Events;
 use App\Events\Pack;
+use App\Events\Slice;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -11,7 +14,7 @@ class Track extends AbstractCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        while (true){
+        while (true) {
             $timeStart = time();
             $this->process();
             $timeDiff = time() - $timeStart;
@@ -33,7 +36,7 @@ class Track extends AbstractCommand
             $time = microtime(true) - $startTime;
             if ($time > 60) {
                 $cnt = $this->redis->track_raw->sCard();
-                if ($cnt){
+                if ($cnt) {
                     $this->out('Not enough time. ' . $cnt . ' left');
                     $this->redis->track_raw->del();
                     $this->out('[!] Deleted track_raw from redis');
@@ -51,46 +54,42 @@ class Track extends AbstractCommand
         $packer = new Pack();
         $count = $packer->flushMetrics();
         $slicesCount = $packer->flushSlices();
-        $this->out('Slices count: '.$slicesCount);
+        $this->out('Slices count: ' . $slicesCount);
         return $count;
     }
 
     private function pack()
     {
-        $eventPack = $this->redis->track_raw->sPop();
-        if (!$eventPack) {
+        $eventsJson = $this->redis->track_raw->sPop();
+        if (!$eventsJson) {
             return 0;
         }
-        $rawEvents = json_decode($eventPack, true);
 
-        if (!count($rawEvents) || !count($rawEvents[0])) {
+        $events = Events::fromJson($eventsJson);
+
+        if (empty($events)) {
             return 0;
         }
 
         $pipe = $this->redis->getPipe();
 
-//        $minute = (int)(date('H') * 60 + date('i'));
-        foreach ($rawEvents as $data) {
-//            $ts = strtotime($date);
-//            $minute = date('H', $ts) * 60 + date('i', $ts);
+        foreach ($events as $event) {
+            /** @var Event $event */
+            $pipe->zIncrBy('track_aggr_metrics', $event->getValue(), $event->getMetric());
+            $pipe->zIncrBy('track_aggr_metric_totals', $event->getValue(), $event->getMetric());
 
-            // Force current minute
-            $value = (int)$data['value'];
-//            $this->redis->track_aggr_metrics->zIncrBy($data['metric'], $value);
-            $pipe->zIncrBy('track_aggr_metrics', $value, $data['metric']);
-            $pipe->zIncrBy('track_aggr_metric_totals', $value, $data['metric']);
-
-            foreach ($data['slices'] as $category => $slice) {
-                $slicesKey = implode('|', [$data['metric'], $category, $slice]);
-//                $this->redis->track_aggr_slices->zIncrBy($slicesKey, $value);
-                $pipe->zIncrBy('track_aggr_slices', $value, $slicesKey);
-                $pipe->zIncrBy('track_aggr_slice_totals', $value, $slicesKey);
+            foreach ($event->getSlices() as $slice) {
+                /**
+                 * @var Slice $slice
+                 */
+                $slicesKey = implode('|', [$event->getMetric(), $slice->getName(), $slice->getValue()]);
+                $pipe->zIncrBy('track_aggr_slices', $event->getValue(), $slicesKey);
+                $pipe->zIncrBy('track_aggr_slice_totals', $event->getValue(), $slicesKey);
             }
         }
-        if ($rawEvents){
-            $pipe->exec();
-        }
 
-        return count($rawEvents);
+        $pipe->exec();
+
+        return count($events);
     }
 }

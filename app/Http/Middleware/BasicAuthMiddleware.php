@@ -3,11 +3,12 @@
 
 namespace App\Http\Middleware;
 
-use App\Injectable;
 use GuzzleHttp\Psr7\Response;
-use Interop\Http\ServerMiddleware\DelegateInterface;
-use Interop\Http\ServerMiddleware\MiddlewareInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Http\Message\ResponseInterface;
+
 
 class BasicAuthMiddleware implements MiddlewareInterface
 {
@@ -21,12 +22,12 @@ class BasicAuthMiddleware implements MiddlewareInterface
         $this->hydrate($options);
     }
 
-    public function process(ServerRequestInterface $request, DelegateInterface $delegate)
+    public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         if (!$this->authenticate($request)){
             return new Response(401, [], 'Access denied');
         }
-        return $delegate->process($request);
+        return $handler->handle($request);
     }
 
     public function setUser(string $user)
