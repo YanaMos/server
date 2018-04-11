@@ -29,7 +29,7 @@
 $data = gzcompress(json_encode(events));
 ```
 ```python
-# Python
+# Python 
 data = zlib.compress(events)
 ```
 
